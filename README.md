@@ -10,5 +10,6 @@
     - [Coding in R](https://github.com/ellahidveghy/portfolio/blob/main/R%20Code%201)
 
 
-
+- [Analysis of Airbnb Pricing Dynamics](https://github.com/ellahidveghy/portfolio/blob/main/Analysis%20of%20Airbnb%20Pricing%20Dynamics.pdf)
+- 
   
