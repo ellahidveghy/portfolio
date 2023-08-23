@@ -1,0 +1,431 @@
+# packages
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(viridis)
+library(hrbrthemes)
+library(ggpubr)
+library(lubridate)
+library(MASS)
+
+
+# investigation 1
+
+# load data
+
+Full_Crime2019 <- read.csv("C:/Users/cdavi/OneDrive/Documents/UNI/Y3 S2/Ap Stats/Coursework 2/Crime2019List.csv")
+Full_CrimeDaily <- read.csv("C:/Users/cdavi/OneDrive/Documents/UNI/Y3 S2/Ap Stats/Coursework 2/CrimeDailyCounts.csv")
+Full_AmericanSurvey <- read.csv("C:/Users/cdavi/OneDrive/Documents/UNI/Y3 S2/Ap Stats/Coursework 2/American Community Survey 2015-2019.csv.csv")
+Full_Weather <- read.csv("C:/Users/cdavi/OneDrive/Documents/UNI/Y3 S2/Ap Stats/Coursework 2/Weather Denver.csv")
+
+# data manipulation
+Crime2019 <- Full_Crime2019  %>%
+  group_by(District) %>%
+  mutate(district_count = n()) %>%
+  group_by(District) %>%
+  mutate(WC_district_count = sum(Category == 'white-collar-crime')) %>%
+  mutate(Proportion_WC_discrict_count = WC_district_count/district_count) %>%
+  group_by(District,Reported_Month) %>%
+  mutate(month_district_count = n()) %>%
+  group_by(District,Reported_Month) %>%
+  mutate(month_WC_district_count = sum(Category == 'white-collar-crime')) %>%
+  mutate(Proportion_month_WC_discrict_count = month_WC_district_count/month_district_count)
+
+WC_crime2019 <- Crime2019[Crime2019$Category == 'white-collar-crime',]
+
+WC_crime_district <- Crime2019[c(1, 2, 3, 8, 14, 15, 22257), ] %>%
+  mutate(Other_discrict_count = district_count - WC_district_count) 
+
+
+Graph_WC_crime_district <- data.frame(District = c(WC_crime_district$District, WC_crime_district$District), 
+                                      Source = c("Other Crime", "Other Crime", "Other Crime", "Other Crime", 
+                                                 "Other Crime", "Other Crime", "Other Crime", "White Collar Crime", 
+                                                 "White Collar Crime", "White Collar Crime", "White Collar Crime", 
+                                                 "White Collar Crime", "White Collar Crime", "White Collar Crime"), 
+                                      Count = c(WC_crime_district$Other_discrict_count,WC_crime_district$WC_district_count))
+
+
+# plot
+ggplot(Graph_WC_crime_district, aes(fill=Source, y=Count, x=District)) + 
+    geom_bar(position="stack", stat="identity", ) +
+    scale_fill_viridis(discrete = T)
+
+ggplot(Graph_WC_crime_district, aes(fill=Source, y=Count, x=District)) + 
+    geom_bar(position="fill", stat="identity") +
+    scale_fill_viridis(discrete = T) + scale_x_discrete(limits=c("1", "2", "3", "4", "5", "6", "7")) + 
+scale_y_continuous(labels = scales::percent) + labs(fill = "Catergory of crime", y = "Percentage") + theme_minimal() 
+
+
+# is there a difference between first occurrence and reported
+WC_crime2019 <- WC_crime2019 %>%
+  mutate(diff_month = First_Occ_Month - Reported_Month) %>%
+  mutate(diff_day = First_Occ_Day - Reported_Day) %>%
+  mutate(diff_hour = First_Occ_Hour - Reported_Hour)
+
+
+test_WC_crime2019_model1 <- dplyr:: select(WC_crime_district, District, Reported_Month, Proportion_WC_discrict_count) 
+
+# Perform the ANOVA test
+model1 <- aov(Proportion_WC_discrict_count ~ District, data = test_WC_crime2019_model1)
+summary(model1)
+
+
+test_WC_crime2019_model2 <- test_WC_crime2019_model1[-c(7), ]
+model2 <- aov(Proportion_WC_discrict_count ~ District, data = test_WC_crime2019_model2)
+summary(model2)
+
+mean(test_WC_crime2019_model2$Proportion_WC_discrict_count)
+
+
+Daily_change_2019 <- filter(Full_CrimeDaily, Year == "2019")
+Daily_change_2019 <- filter(Daily_change_2019, Category == "white-collar-crime")
+my_months <- c("Jan","Feb","Mar",
+              "Apr","May","Jun",
+              "Jul","Aug","Sep",
+              "Oct","Nov","Dec")
+
+Daily_change_2019$MonthAbb <- my_months[ Daily_change_2019$First_Occ_Month ]
+Daily_change_2019$date <- paste(Daily_change_2019$First_Occ_Day, Daily_change_2019$First_Occ_Month, sep="")
+
+Daily_change_2019 <- Daily_change_2019 %>% 
+  rename(
+    Month = First_Occ_Month,
+    Day = First_Occ_Day 
+    )
+
+
+
+
+
+# Visualize the distribution of daily crime counts using a histogram
+hist(Daily_change_2019$Count, breaks = 20, main = "Distribution of Daily White-collar Crimes in 2019")
+
+Daily_change_2019_2 <- Daily_change_2019 %>% group_by(Month) %>% 
+  summarise(mean_daily_count=mean(Count),
+            .groups = 'drop')
+
+Daily_change_2019_3 <- Daily_change_2019_2
+
+Daily_change_2019_3$Month <- my_months[ Daily_change_2019_3$Month ]
+
+Daily_change_2019_3$Month  = factor(Daily_change_2019_3$Month, levels = month.abb)
+
+ggplot(Daily_change_2019_3, aes(x=Month, y=mean_daily_count, fill = as.factor(Month))) + theme_minimal() + geom_col() + theme(legend.position = "none") + labs(y= "average daily number of white-collar crimes")
+
+Daily_change_2019_2$Month <- as.numeric(Daily_change_2019_2$Month)
+
+Daily_change_2019$MonthAbb  = factor(Daily_change_2019$MonthAbb, levels = month.abb)
+
+model12 <- glm(Count~MonthAbb, family = poisson ,data=Daily_change_2019)
+summary(model12)
+
+
+
+model13 <- glm(Count ~ 1 , family = poisson ,data=Daily_change_2019)
+summary(model13)
+
+model14 <- glm.nb(Count~MonthAbb, data=Daily_change_2019)
+summary(model14)
+
+
+
+model15 <- glm.nb(Count ~ 1 ,data=Daily_change_2019)
+summary(model15)
+plot(model14)
+
+AIC(model12)
+AIC(model13)
+AIC(model14)
+AIC(model15)
+
+
+ggplot(Daily_change_2019, aes(x=MonthAbb, y=Count, fill = as.factor(MonthAbb))) + 
+  geom_boxplot() + theme_minimal() + theme(legend.position = "none") + labs(y= "average daily number of white-collar crimes", x="Month")
+
+-0.30282-(1.96*0.14869)
+
+
+#investigation 2
+
+# Rename datasets 
+Counts = read.csv(file='CrimeDailyCounts.csv',header=T)
+Weather = read.csv(file='Weather Denver.csv',header=T)
+
+# Crime categories:
+crimes = levels(factor(Counts$Category))
+crimes
+
+# Change into date
+Counts$Date = as.Date(with(Counts, paste(First_Occ_Day,First_Occ_Month,Year,sep="-")),"%d-%m-%Y")
+Counts
+head(Weather)
+
+# split date into year month and day
+Weather$Date2 = Weather$Date
+Weather = Weather %>% separate(Date2, sep="/", into = c("day","month","year"))
+# tidy up date categories
+Weather$day = as.numeric(Weather$day)
+Weather$year = as.numeric(Weather$year)
+Weather$month = factor(Weather$month)
+levels(Weather$month) = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+summary(Weather)
+
+length(Weather$Date)
+# select burglaries from all crime types
+burglaries = Counts[Counts$Category=='burglary',]
+# same amount of observed days as weather data?
+length(burglaries$Year)
+# at least one burglary a day 
+# we can add the count variable directly 
+Weather$BurglaryCount = burglaries$Count
+
+# Plot burglary counts by year
+ggplot(data = Weather, aes(x=factor(year),y=BurglaryCount) )+ geom_boxplot() + ylab("Daily Burglary Count") 
++ xlab("Year")+ labs(color='Minimum \nTemperature \n(ªF)') + ggtitle("Daily Burglary Count in 2018-2020")
+
+# t-test 2020 mean burglaries against 2018 mean burglaries 
+t.test(Weather[Weather$year=='2018',]$BurglaryCount,Weather[Weather$year=='2020',]$BurglaryCount,var.equal = T)
+# t-test 2020 mean burglaries against 2019 mean burglaries 
+t.test(Weather[Weather$year=='2019',]$BurglaryCount,Weather[Weather$year=='2020',]$BurglaryCount,var.equal = T)
+# t-test 2019 mean burglaries against 2018 mean burglaries 
+t.test(Weather[Weather$year=='2018',]$BurglaryCount,Weather[Weather$year=='2019',]$BurglaryCount,var.equal = T)
+
+# correlation matrix
+cor(subset(Weather, select=c("Temp_max","Temp_min","Precipitation","BurglaryCount","day","year")))
+
+# max temp vs burglary count 
+Weather$Month = factor(Weather$month)
+levels(Weather$month) = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+ggplot(data = Weather, aes(x=Temp_max,y=BurglaryCount,colour = Month)) + geom_point() + scale_color_brewer(palette="Paired") 
++ ylab("Daily Burglary Count") + xlab("Maximum Temperature (ªF)" )
+
+Weather$Date = as.Date(Weather$Date,"%d/%m/%Y")
+summary(Weather)
+
+# max temp vs burglary count 
+ggplot(data = Weather, aes(x=Date,y=BurglaryCount,colour = Temp_min)) + geom_point() + ylab("Daily Burglary Count") + xlab("Date" ) 
++ ggtitle("Daily Burglary Count in 2018-2020") + labs(colour ="Minimum\nTemperature\n(ªF)" ) 
+
+# set seed for same results as stated in report
+set.seed(1234)
+rows = sample(1:1096, 110, replace=F)
+Test = Weather[rows,]
+Train = Weather[-rows,]
+m1 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation,
+             family = poisson,
+             data = Train)
+
+RMSE1 = sqrt(sum((Test$BurglaryCount - predict(m1,Test[c("Temp_max","Temp_min","Precipitation")],
+                                                      type="response"))^2)/(dim(Test)[1]) )
+m2 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation+factor(month)+year,
+         family = poisson,
+         data = Train)
+RMSE2 = sqrt(sum((Test$BurglaryCount - predict(m2,Test[c("Temp_max","Temp_min","Precipitation","month","year","day")],
+                                                        type="response"))^2)/(dim(Test)[1]) )
+RMSE1
+RMSE2
+
+
+range(Weather$BurglaryCount)
+mean(Weather$BurglaryCount)
+var(Weather$BurglaryCount)
+
+# repeat 100 times...
+RMSEm1 = rep(0,100)
+RMSEm2 = rep(0,100)
+for (i in 1:100)
+  {
+  rows = sample(1:1096, 110, replace=F)
+  Test = Weather[rows,]
+  Train = Weather[-rows,]
+  m1 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation,
+             family = poisson,
+             data = Train)
+  # rmse 
+  RMSEm1[i] = sqrt(sum((Test$BurglaryCount - predict(m1,Test[c("Temp_max","Temp_min","Precipitation")],
+                                                        type="response"))^2)/(dim(Test)[1]) )
+
+  m2 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation+factor(month)+year,
+             family = poisson,
+             data = Train)
+  RMSEm2[i] = sqrt(sum((Test$BurglaryCount - predict(m2,Test[c("Temp_max","Temp_min","Precipitation","month","year","day")],
+                                                        type="response"))^2)/(dim(Test)[1]) )
+}
+mean(RMSEm1)
+mean(RMSEm2)
+RMSEm1
+
+# m1 model
+par(mfrow=c(2,2))
+m1 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation,
+             family = poisson,
+             data = Weather)
+plot(m1)
+
+# variable by residuals 
+par( mfrow=c(2,2) )
+plot( Weather$Temp_max, resid(m1, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Maximum Temperature" )
+plot( Weather$Temp_min, resid(m1, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Minimum Temperature" )
+plot( Weather$Precipitation, resid(m1, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Precipitation" )
+
+# m2
+par(mfrow=c(2,2))
+m2 = glm(BurglaryCount~Temp_max+Temp_min+Precipitation+factor(month)+year,
+         family = poisson,
+         data = Weather)
+plot(m2)
+
+# variable by residuals 
+par( mfrow=c(3,2) )
+plot( Weather$Temp_max, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Maximum Temperature" )
+plot( Weather$Temp_min, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Minimum Temperature" )
+plot( Weather$Precipitation, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Precipitation" )
+plot( Weather$year, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Year" )
+plot( factor(Weather$month), resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Month" )
+
+# investigation 3
+
+#data from 2018-2020
+daildenv <- read.csv("CrimeDailyCounts.csv")
+summary(daildenv)
+
+denv2019 <- read.csv("Crime2019List.csv")
+summary(denv2019)
+
+levels(factor(daildenv$Category))
+
+CarTheft <- daildenv[daildenv$Category == "auto-theft",]
+
+
+PreCovid <- CarTheft %>%
+    filter((Year == 2018) | (Year == 2019) | (Year == 2020 & First_Occ_Month == 2) | (Year == 2020 & First_Occ_Month == 1) 
+           | (Year == 2020 & First_Occ_Month ==3 & First_Occ_Day <= 15))
+  
+PostCovid <- CarTheft %>%
+  filter((Year == 2020 & First_Occ_Month == 3 & First_Occ_Day >= 16) | (Year == 2020 & First_Occ_Month > 3))
+
+PreCovid <- data.frame(PreCovid, Covid_Period="Pre")
+PostCovid <- data.frame(PostCovid, Covid_Period="Post")
+CarThefts <- rbind(PreCovid,PostCovid)
+summary(CarThefts)
+
+CarThefts <- CarThefts %>%
+  mutate(Covid_Period = factor(Covid_Period, levels = c("Pre", "Post")))
+
+ggplot(CarThefts, aes(x = Covid_Period, y = Count,fill = as.factor(Covid_Period))) +           
+  geom_boxplot() + xlab("Post or Pre Covid") + ylab("Daily Car Thefts") + ggtitle("Car Thefts before and after Covid")  +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+monthly_car_thefts <- CarThefts %>%
+  group_by(Year, First_Occ_Month) %>%
+  summarize(total_car_thefts = sum(Count),
+            .groups = "drop")
+
+
+ggplot(monthly_car_thefts, aes(x = First_Occ_Month, y = total_car_thefts, fill = as.factor(First_Occ_Month))) +
+  geom_col() +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "Monthly Car Thefts",
+       x = "Month",
+       y = "Count of Car Thefts",
+       fill = "Month") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+m1 <- glm(Count ~ Covid_Period  + First_Occ_Month,family=poisson(link = "log"), data = CarThefts)
+
+summary(m1)
+
+pearson_chisq <- sum(residuals(m1, type = "pearson")^2)
+p_value <- 1 - pchisq(pearson_chisq, m1$df.residual)
+p_value
+
+
+m2 <- glm.nb(Count ~ Covid_Period  + First_Occ_Month, data = CarThefts)
+
+summary(m2)
+confint(m2)
+
+
+par(mfrow=c(2,2))
+plot(m2)
+par( mfrow=c(1,2) )
+plot( CarThefts$Covid_Period, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Covid Period" )
+plot( CarThefts$First_Occ_Month, resid(m2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Month" )
+
+
+AllOtherCrimes <- daildenv[daildenv$Category == "all-other-crimes",]
+
+
+PreCovid1 <- AllOtherCrimes %>%
+    filter((Year == 2018) | (Year == 2019) | (Year == 2020 & First_Occ_Month == 2) | (Year == 2020 & First_Occ_Month == 1) | (Year == 2020 & First_Occ_Month ==3 & First_Occ_Day <= 15))
+  
+PostCovid1 <- AllOtherCrimes %>%
+  filter((Year == 2020 & First_Occ_Month == 3 & First_Occ_Day >= 16) | (Year == 2020 & First_Occ_Month > 3))
+
+PreCovid1 <- data.frame(PreCovid1, Covid_Period="Pre")
+PostCovid1 <- data.frame(PostCovid1, Covid_Period="Post")
+AllOthCrimes <- rbind(PreCovid1,PostCovid1)
+summary(AllOthCrimes)
+
+AllOthCrimes <- AllOthCrimes %>%
+  mutate(Covid_Period = factor(Covid_Period, levels = c("Pre", "Post")))
+
+C <- read.csv("offense_codes.csv")
+Crimes <- C %>%
+    filter(OFFENSE_CATEGORY_NAME == "All Other Crimes")
+
+Crimes$OFFENSE_TYPE_NAME
+
+ggplot(AllOthCrimes, aes(x = Covid_Period, y = Count,fill = as.factor(Covid_Period))) +           
+  geom_boxplot() + xlab("Post or Pre Covid") + ylab("Daily Crime") + ggtitle("All Other Crimes before and after covid") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+monthly_crimes <- AllOthCrimes %>%
+  group_by(Year, First_Occ_Month) %>%
+  summarize(total_crimes = sum(Count),
+            .groups = "drop")
+
+
+ggplot(monthly_crimes, aes(x = First_Occ_Month, y = total_crimes, fill = as.factor(First_Occ_Month))) +
+  geom_col() +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "Monthly All Other Crimes",
+       x = "Month",
+       y = "Count of All Other Crimes",
+       fill = "Month") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+mod1 <- glm(Count ~ Covid_Period, family=poisson(link = "log"), data = AllOthCrimes)
+
+summary(mod1)
+
+pearson_chisq <- sum(residuals(mod1, type = "pearson")^2)
+p_value <- 1 - pchisq(pearson_chisq, mod1$df.residual)
+p_value
+
+mod2 <- glm.nb(Count ~ Covid_Period, data = AllOthCrimes)
+
+summary(mod2)
+confint(mod2)
+
+par(mfrow=c(2,2))
+plot(mod2)
+
+plot( AllOthCrimes$Covid_Period, resid(mod2, type="deviance"), 
+      ylab="Deviance Residuals", xlab="Covid Period" )
+
+
