@@ -1,0 +1,340 @@
+## Analysing the Airbnb Price Data in European Cities
+
+```{r,eval=T}
+#loading relevant libraries
+library(ggplot2)
+library(gridExtra)
+library(boot)
+
+```
+
+**Task 1:**
+
+#reading all the data sets 
+londonwe <- read.csv("london_weekends.csv")
+londonwd <- read.csv("london_weekdays.csv")
+barcewe <- read.csv("barcelona_weekends.csv")
+barcewd <- read.csv("barcelona_weekdays.csv")
+
+
+Airbnbs <- rbind(londonwd,londonwe,barcewe,barcewd)
+summary(Airbnbs)
+
+
+levels(factor(Airbnbs$room_type))
+
+
+#Creating vectors containing only the realSum data for each certain room type. 
+
+aptbarce <- barcewd[barcewd$room_type == "Entire home/apt",]
+avlisting1 <- (aptbarce$realSum)/4 
+x <- sum(avlisting1)/length(avlisting1)
+
+privbarce <- barcewd[barcewd$room_type =="Private room",]
+avlisting2 <- (privbarce$realSum)/4
+y <- sum(avlisting2)/length(avlisting2)
+
+sharebarce <- barcewd[barcewd$room_type == "Shared room",]
+avlisting3 <-(sharebarce$realSum)/4
+z <- sum(avlisting3)/length(avlisting3)
+
+a <- c(x,y,z)
+avlisting <- matrix(a, nrow = 1, ncol =3)
+colnames(avlisting) = c("Entire home/apt", "Private room", "Shared room")
+
+avlisting
+
+
+**Task 2:** 
+
+
+
+boxplot(barcewd$guest_satisfaction_overall~barcewd$cleanliness_rating, 
+     xlab = "Cleanliness Rating", ylab = "Guest Satisfaction Rating") 
+
+
+
+#looking at the summary statistics
+by(barcewd$guest_satisfaction_overall,barcewd$cleanliness_rating, summary)
+
+
+
+#boxplot
+ggplot(londonwd, aes(x = host_is_superhost, y = guest_satisfaction_overall)) +           
+  geom_boxplot() + xlab("Host is Superhost") + ylab("Guest Satisfaction Rating")
+
+
+
+#table of super-host variable and summary statistics
+table(barcewd$host_is_superhost)
+by(barcewd$guest_satisfaction_overall,barcewd$host_is_superhost,summary)
+
+
+
+**Task 3:** 
+
+
+library(gridExtra)
+#box plots
+p1 <- ggplot(barcewe, aes(x = room_type, y = realSum)) +           
+  geom_boxplot() + xlab("Room Type") + ylab("Listed room prices") + ggtitle("Listed Room Prices in Barcelona")
+p2 <- ggplot(londonwe, aes(x = room_type, y = realSum)) +           
+  geom_boxplot() + xlab("Room Type") + ylab("Listed room prices") + ggtitle("Listed Room Prices in London")
+
+#arranging the box plots in to one plot.
+grid.arrange(p1,p2,ncol=2)
+
+
+
+p3 <- ggplot(barcewe, aes(x = room_type, y = log(realSum))) +           
+  geom_boxplot() + xlab("Room Type") + ylab("Listed room prices") + ggtitle("Listed Room Prices in Barcelona")
+p4 <- ggplot(londonwe, aes(x = room_type, y = log(realSum))) +           
+  geom_boxplot() + xlab("Room Type") + ylab("Listed room prices") + ggtitle("Listed Room Prices in London")
+
+grid.arrange(p3,p4,ncol=2)
+
+
+
+**Task 4:** 
+
+
+var.test(barcewe$realSum,londonwe$realSum)
+
+
+par(mfrow=c(1,2))
+hist(barcewe$realSum, xlab = "Listing Price", main = "Histogram of Barcelona Listing Prices")
+hist(londonwe$realSum,xlab = "Listing Price", main = "Histogram of London Listing Prices")
+
+
+par(mfrow=c(1,2))
+
+qqnorm(barcewe$realSum)
+qqline(barcewe$realSum)
+qqnorm(londonwe$realSum)
+qqline(londonwe$realSum)
+
+
+
+wilcox.test(londonwe$realSum,barcewe$realSum, alternative="two.sided")
+
+
+median(barcewe$realSum)
+median(londonwe$realSum)
+
+
+
+**Task 5:** 
+
+
+
+#combining the Barcelona weekends and weekdays data sets.
+weekends <- data.frame(barcewe, days_of_week="Weekend")
+weekdays <- data.frame(barcewd, days_of_week="Weekdays")
+barcelona <- rbind(weekends,weekdays)
+
+#making sure categorical variables are set as factors
+barcelona$days <- as.factor(barcelona$days_of_week)
+barcelona$type <- as.factor(barcelona$room_type)
+barcelona$host <- as.factor(barcelona$host_is_superhost)
+barcelona$bed <- as.factor(barcelona$bedrooms)
+
+
+
+#initial glm
+mod0 <- glm(realSum ~ days, family = Gamma(identity), data = barcelona)
+mod1 <- glm(log(realSum) ~ days, family=Gamma(identity), data = barcelona)
+
+AIC(mod0,mod1)
+
+
+summary(mod1)
+
+
+library(gridExtra)
+#person capacity
+p1 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=person_capacity ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Person Capacity") + ylab("Log(Listing pr)")
+#superhost
+p2 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=host ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Host") + ylab("Log(Listing pr)")
+#biz
+p3 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=biz ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Biz") + ylab("Log(Listing pr)")
+
+
+#cleanliness rating
+p4 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=cleanliness_rating ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Cleanliness Rating") + ylab("Log(Listing pr)")
+#bedrooms
+
+
+p5 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=bed ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Bedrooms") + ylab("Log(Listing pr)")
+#guest satisfaction
+p6 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=guest_satisfaction_overall ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Guest satisfaction") + ylab("Log(Listing pr)")
+
+#distance
+p7 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=dist ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Distance") + ylab("Log(Listing pr)")
+#metro distance
+p8 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=metro_dist,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) + xlab("Metro Distance") + ylab("Log(Listing pr)")
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8, ncol=2, nrow=4)
+
+
+par(mfrow=c(2,2))
+boxplot(log(barcelona$realSum)~barcelona$person_capacity, xlab = "Person Capacity",
+        ylab = "Log of Listing Price")
+boxplot(log(barcelona$realSum)~barcelona$bed, xlab = "Bedrooms", 
+        ylab = "Log of Listing Price")
+boxplot(log(barcelona$realSum)~barcelona$biz, xlab = "Biz", 
+        ylab = "Log of Listing Price")
+plot(barcelona$dist,log(barcelona$realSum), xlab = "Distance", 
+     ylab = "Log of Listing Price")
+
+
+
+#normalised attraction index
+plot1 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=attr_index_norm ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1) 
+#restaurant index
+plot2 <- ggplot(barcelona) + theme_bw()+
+  geom_jitter(aes(x=rest_index ,y=log(realSum),col=days_of_week),width = 0.1, height = 0.1)
+
+grid.arrange(plot1,plot2,nrow=2)
+
+
+mod2 <- glm(log(realSum) ~ days + type + person_capacity + bedrooms + biz + dist
+            + rest_index, family=Gamma(identity), data=barcelona)
+AIC(mod2)
+
+
+par(mfrow=c(2,2))
+plot(mod2)
+
+
+summary(mod2)
+
+
+#distance
+(exp(-0.05533)-1)*100
+#room type
+#private room
+(exp(-0.6411)-1)*100
+#shared room
+(exp(-1.110)-1)*100
+#days of the week
+(exp(0.1079)-1)*100
+
+*Task 6:**
+
+m0 <- glm(log(realSum) ~ room_type + person_capacity + host_is_superhost + biz 
+    + cleanliness_rating + guest_satisfaction_overall + bedrooms + dist + metro_dist 
+    + attr_index_norm + rest_index, family=Gamma(identity), data=barcewd)
+summary(m0)
+
+
+m1 <- glm(log(realSum) ~ room_type + person_capacity + host_is_superhost + biz +
+            cleanliness_rating*guest_satisfaction_overall +  + dist + bedrooms 
+          + metro_dist + rest_index, family=Gamma(identity), data=barcewd)
+AIC(m1)
+
+
+par(mfrow=c(2,2))
+plot(m1)
+
+
+pred <- predict(m1, newdata= barcewe, type="response")
+#exp because we used the log transformation.
+predicted <- exp(pred)
+
+#prediction error
+
+pred.err=function(obs,out,modeltrn)
+{
+  pred=predict(modeltrn,obs,type="response")
+  predicted=exp(pred)
+  mean((out-round(predicted))^2)
+}
+
+pred.err(barcewe,barcewe$realSum,m1)
+
+
+
+#10-fold cross validation
+
+cost <- function(r, pi = 0) mean(abs(r-pi) > 0.5)
+cv.glm(barcewd, m1, cost, K=10)$delta[1]
+
+
+**Task 7:** 
+
+
+
+ggplot(barcelona, aes(x = days_of_week, y = guest_satisfaction_overall)) +           
+  geom_boxplot() + xlab("Days of the Week") + ylab("Guest Satisfaction Rating")
+
+
+glm1 <- glm(guest_satisfaction_overall ~ realSum + type + person_capacity 
+            + host + biz + cleanliness_rating + bed + dist + metro_dist +
+              attr_index_norm + rest_index,family=gaussian, data=barcelona)
+AIC(glm1)
+
+
+glm2=step(glm1)
+
+
+glm2 <- glm(guest_satisfaction_overall ~ type + host + biz + cleanliness_rating
+            + bed + metro_dist + attr_index_norm, 
+family = gaussian, data = barcelona)
+AIC(glm2)
+
+
+
+**Task 8:** 
+
+
+#changing variables to factors
+barcewe$type <- as.factor(barcewe$room_type)
+barcewe$host <- as.factor(barcewe$host_is_superhost)
+
+g0 <- glm(log(realSum) ~ type + person_capacity + host + biz + 
+            cleanliness_rating*guest_satisfaction_overall + dist + bedrooms 
+          + metro_dist + rest_index, family=Gamma(identity), data=barcewe)
+AIC(g0)
+
+
+summary(g0)
+
+
+g1 <- glm(log(realSum) ~ type + person_capacity + host + biz 
+          + cleanliness_rating*guest_satisfaction_overall + dist + bedrooms 
+          + rest_index, family=Gamma(identity), data=barcewe)
+AIC(g1)
+
+
+#factors
+londonwe$type <- as.factor(londonwe$room_type)
+londonwe$host <- as.factor(londonwe$host_is_superhost)
+
+#separating the london weekend prices by room types
+apt_london_we <- londonwe[londonwe$room_type == "Entire home/apt",]
+priv_london_we <- londonwe[londonwe$room_type == "Private room",]
+share_london_we <- londonwe[londonwe$room_type == "Shared room",]
+
+#predicted data set of listing prices for each room type
+pred_apt <- predict(g1, newdata= apt_london_we, type="response")
+predicted_apt <- exp(pred_apt)
+
+pred_priv <- predict(g1, newdata= priv_london_we, type="response")
+predicted_priv <- exp(pred_priv)
+
+pred_share <- predict(g1, newdata= share_london_we, type="response")
+predicted_apt <- exp(pred_share)
+
+
+
+pred.err(londonwe,londonwe$realSum,g1)
+
