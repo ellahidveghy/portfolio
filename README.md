@@ -7,7 +7,7 @@
     - [Coding in Python](https://github.com/ellahidveghy/portfolio/blob/main/Python%20Coding) 
 
 - [Analysis of Crime in Denver, Colorado](https://github.com/ellahidveghy/portfolio/blob/main/Analysis%20of%20Crime%20in%20Denver%2C%20Colorado.pdf)
--     [Coding in R](https://github.com/ellahidveghy/portfolio/blob/main/R%20Code%201)
+    - [Coding in R](https://github.com/ellahidveghy/portfolio/blob/main/R%20Code%201)
 
 
 
